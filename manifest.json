@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Deep Site Scanner",
+  "version": "0.1.0",
+  "description": "Professional deep site scanner — crawl, discover resources, export results",
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs",
+    "webNavigation",
+    "downloads",
+    "offscreen",
+    "alarms",
+    "contextMenus",
+    "sidePanel",
+    "notifications"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/infrastructure/background/service-worker.ts",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/presentation/popup/index.html"
+  },
+  "options_page": "src/presentation/options/index.html",
+  "side_panel": {
+    "default_path": "src/presentation/sidepanel/index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/infrastructure/content-script/index.ts"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
