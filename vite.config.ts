@@ -1,17 +1,21 @@
 import { defineConfig } from 'vite';
-import { crx } from '@crxjs/vite-plugin';
-import manifest from './manifest.json';
+import { resolve } from 'path';
 
 export default defineConfig({
-  plugins: [crx({ manifest })],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        background: 'src/infrastructure/background/service-worker.ts',
-        'content-script': 'src/infrastructure/content-script/index.ts',
-        offscreen: 'src/infrastructure/offscreen/index.ts',
+        'service-worker': resolve(__dirname, 'src/infrastructure/background/service-worker.ts'),
+        'content-script': resolve(__dirname, 'src/infrastructure/content-script/index.ts'),
+        'popup': resolve(__dirname, 'src/presentation/popup/popup.ts'),
+        'sidepanel': resolve(__dirname, 'src/presentation/sidepanel/sidepanel.ts'),
+        'options': resolve(__dirname, 'src/presentation/options/options.ts'),
+      },
+      output: {
+        entryFileNames: '[name].js',
+        chunkFileNames: 'chunks/[name]-[hash].js',
       },
     },
   },
