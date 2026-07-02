@@ -42,6 +42,16 @@ export class MessageRouter {
       const job = this.scheduler.getCurrentJob();
       return { job: job ? job.toJSON() : null };
     });
+    this.register('export-results', async (msg) => {
+      const { ExportResultsUseCase } = await import('../../application/use-cases/ExportResultsUseCase');
+      const { InMemoryResourceRepository } = await import('../storage/InMemoryResourceRepository');
+      const useCase = new ExportResultsUseCase(new InMemoryResourceRepository());
+      const result = await useCase.execute({ jobId: msg.jobId, format: msg.format });
+      const url = URL.createObjectURL(result.blob);
+      await chrome.downloads.download({ url, filename: result.filename, saveAs: true });
+      URL.revokeObjectURL(url);
+      return { success: true, filename: result.filename };
+    });
   }
 
   register(action: string, handler: MessageHandler): void {
