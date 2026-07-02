@@ -7,7 +7,6 @@ import { ChromeStorageLocalRepository } from '../storage/ChromeStorageLocalRepos
 import { InMemoryResourceRepository } from '../storage/InMemoryResourceRepository';
 import { StartCrawlUseCase } from '../../application/use-cases/StartCrawlUseCase';
 import { logger } from '../../shared/logger';
-import { HEARTBEAT_INTERVAL_MS } from '../../shared/constants';
 import { isTrustedSender } from '../../shared/security';
 
 const eventBus = new EventBus();
@@ -15,93 +14,61 @@ const portManager = new PortManager();
 const frontierRepo = new ChromeStorageSessionRepository();
 const jobRepo = new ChromeStorageLocalRepository();
 const resourceRepo = new InMemoryResourceRepository();
-const scheduler = new CrawlScheduler(jobRepo, frontierRepo, resourceRepo, eventBus);
+const scheduler = new CrawlScheduler(jobRepo, frontierRepo, resourceRepo, eventBus, portManager);
 const messageRouter = new MessageRouter(scheduler);
+
+// Subscribe EventBus → broadcast to all ports
+eventBus.subscribe('URL_DISCOVERED', (ev) => portManager.broadcast(ev));
+eventBus.subscribe('CRAWL_PROGRESS', (ev) => portManager.broadcast(ev));
+eventBus.subscribe('CRAWL_COMPLETED', (ev) => portManager.broadcast(ev));
+eventBus.subscribe('CRAWL_FAILED', (ev) => portManager.broadcast(ev));
+eventBus.subscribe('CRAWL_PAUSED', (ev) => portManager.broadcast(ev));
 
 chrome.runtime.onInstalled.addListener(async () => {
   logger.info('SW', 'Extension installed');
-  await logger.loadLevel();
-  chrome.alarms.create('crawl-heartbeat', { periodInMinutes: HEARTBEAT_INTERVAL_MS / 60000 });
+  chrome.alarms.create('crawl-heartbeat', { periodInMinutes: 1 });
   chrome.contextMenus.create({ id: 'scan-page', title: 'Scan this page', contexts: ['page'] });
   chrome.contextMenus.create({ id: 'scan-site', title: 'Scan this site', contexts: ['page'] });
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== 'crawl-heartbeat') return;
-  const rehydrated = await scheduler.rehydrate();
-  if (rehydrated) logger.info('SW', 'Crawl resumed after rehydration');
+  await scheduler.rehydrate();
 });
 
-// Request optional host permission for a specific URL
-async function ensureHostPermission(url: string): Promise<boolean> {
-  try {
-    const origin = new URL(url).origin;
-    const alreadyGranted = await chrome.permissions.contains({
-      origins: [origin],
-    });
-    if (alreadyGranted) return true;
-
-    const granted = await chrome.permissions.request({
-      origins: [origin],
-    });
-    return granted;
-  } catch {
-    return false;
-  }
-}
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Validate sender for sensitive operations
   if (message.action !== 'get-status' && !isTrustedSender(sender)) {
     sendResponse({ error: 'Untrusted sender' });
     return false;
   }
-
-  // Handle start-crawl: request permission, use use case, pass to scheduler
   if (message.action === 'start-crawl' && message.config?.startUrl) {
-    ensureHostPermission(message.config.startUrl).then((permitted) => {
-      if (!permitted) {
-        sendResponse({ error: 'Permission denied for host' });
-        return;
-      }
-      const useCase = new StartCrawlUseCase(jobRepo, frontierRepo);
-      useCase.execute({
-        startUrl: message.config.startUrl,
-        maxDepth: message.config.maxDepth ?? 5,
-        domainScope: message.config.domainScope,
-      }).then(async (result) => {
-        await scheduler.setJobAndFrontier(result.job, result.frontier);
-        await scheduler.processNextUrl();
-        sendResponse({ success: true });
-      }).catch(err => {
-        sendResponse({ error: String(err) });
-      });
-    }).catch(err => {
-      sendResponse({ error: String(err) });
-    });
+    new StartCrawlUseCase(jobRepo, frontierRepo).execute({
+      startUrl: message.config.startUrl,
+      maxDepth: message.config.maxDepth ?? 3,
+      domainScope: message.config.domainScope,
+    }).then(async (result) => {
+      await scheduler.setJobAndFrontier(result.job, result.frontier);
+      await scheduler.processNextUrl();
+      sendResponse({ success: true });
+    }).catch(err => sendResponse({ error: String(err) }));
     return true;
   }
-
   messageRouter.route(message, sender).then(sendResponse);
   return true;
 });
 
 chrome.runtime.onConnect.addListener((port) => {
   portManager.register(port);
-  port.onMessage.addListener((msg) => {
-    if (msg.action === 'subscribe') portManager.subscribe(port.name || '', msg.topic);
-  });
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.url) return;
-  if (info.menuItemId === 'scan-page' || info.menuItemId === 'scan-site') {
-    chrome.runtime.sendMessage({
-      action: 'start-crawl',
-      jobId: crypto.randomUUID(),
-      config: { startUrl: tab.url, maxDepth: info.menuItemId === 'scan-page' ? 0 : 5 },
-    });
-  }
+  const maxDepth = info.menuItemId === 'scan-page' ? 0 : 3;
+  chrome.runtime.sendMessage({
+    action: 'start-crawl',
+    jobId: crypto.randomUUID(),
+    config: { startUrl: tab.url, maxDepth, domainScope: 'SAME_ORIGIN' },
+  });
 });
 
 logger.info('SW', 'Service worker initialized');

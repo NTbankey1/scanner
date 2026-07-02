@@ -16,8 +16,7 @@
     "notifications",
     "unlimitedStorage"
   ],
-  "optional_host_permissions": ["<all_urls>"],
-  "host_permissions": [],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "src/infrastructure/background/service-worker.ts",
     "type": "module"
