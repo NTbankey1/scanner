@@ -29,6 +29,15 @@ export class MessageRouter {
       await this.scheduler.handleCommand({ type: 'CANCEL', jobId: msg.jobId });
       return { success: true };
     });
+    this.register('resources-discovered', async (msg, sender) => {
+      const url = sender?.url || msg.url || '';
+      await this.scheduler.handleResourcesDiscovered(msg.jobId, url, msg.resources || []);
+      return { success: true };
+    });
+    this.register('scan-complete', async (msg) => {
+      await this.scheduler.handleScanComplete(msg.jobId, msg.url || '');
+      return { success: true };
+    });
     this.register('get-status', async () => {
       const job = this.scheduler.getCurrentJob();
       return { job: job ? job.toJSON() : null };

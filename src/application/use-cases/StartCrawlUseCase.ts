@@ -15,7 +15,7 @@ export interface StartCrawlInput {
   respectRobotsTxt?: boolean;
 }
 
-export interface StartCrawlResult { job: CrawlJob; }
+export interface StartCrawlResult { job: CrawlJob; frontier: UrlFrontier; }
 
 export class StartCrawlUseCase {
   constructor(
@@ -42,6 +42,6 @@ export class StartCrawlUseCase {
 
     await this.jobRepo.save(job);
     await this.frontierRepo.save(frontier);
-    return { job };
+    return { job, frontier };
   }
 }

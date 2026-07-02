@@ -4,6 +4,8 @@ import { EventBus } from '../messaging/EventBus';
 import { PortManager } from '../messaging/PortManager';
 import { ChromeStorageSessionRepository } from '../storage/ChromeStorageSessionRepository';
 import { ChromeStorageLocalRepository } from '../storage/ChromeStorageLocalRepository';
+import { InMemoryResourceRepository } from '../storage/InMemoryResourceRepository';
+import { StartCrawlUseCase } from '../../application/use-cases/StartCrawlUseCase';
 import { logger } from '../../shared/logger';
 import { HEARTBEAT_INTERVAL_MS } from '../../shared/constants';
 
@@ -11,7 +13,8 @@ const eventBus = new EventBus();
 const portManager = new PortManager();
 const frontierRepo = new ChromeStorageSessionRepository();
 const jobRepo = new ChromeStorageLocalRepository();
-const scheduler = new CrawlScheduler(jobRepo, frontierRepo, eventBus);
+const resourceRepo = new InMemoryResourceRepository();
+const scheduler = new CrawlScheduler(jobRepo, frontierRepo, resourceRepo, eventBus);
 const messageRouter = new MessageRouter(scheduler);
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -29,6 +32,23 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Handle start-crawl: use the use case, then pass to scheduler
+  if (message.action === 'start-crawl' && message.config?.startUrl) {
+    const useCase = new StartCrawlUseCase(jobRepo, frontierRepo);
+    useCase.execute({
+      startUrl: message.config.startUrl,
+      maxDepth: message.config.maxDepth ?? 5,
+      domainScope: message.config.domainScope,
+    }).then(async (result) => {
+      await scheduler.setJobAndFrontier(result.job, result.frontier);
+      await scheduler.processNextUrl();
+      sendResponse({ success: true });
+    }).catch(err => {
+      sendResponse({ error: String(err) });
+    });
+    return true;
+  }
+
   messageRouter.route(message, sender).then(sendResponse);
   return true;
 });

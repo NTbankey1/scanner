@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 380px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; background: #fff; color: #1a1a2e; }
+    .container { padding: 16px; }
+    h1 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #16213e; }
+    .input-group { display: flex; gap: 8px; margin-bottom: 12px; }
+    input[type="url"] { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; }
+    input[type="url"]:focus { border-color: #0f3460; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+    .btn-primary { background: #0f3460; color: #fff; }
+    .btn-primary:hover { background: #16213e; }
+    .btn-danger { background: #e94560; color: #fff; }
+    .btn-danger:hover { background: #c73e54; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status { padding: 12px; background: #f8f9fa; border-radius: 6px; margin-bottom: 8px; }
+    .status-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+    .status-label { color: #666; }
+    .status-value { font-weight: 500; }
+    .progress-bar { height: 4px; background: #e9ecef; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #0f3460; border-radius: 2px; transition: width 0.3s; width: 0%; }
+    .log { margin-top: 8px; max-height: 160px; overflow-y: auto; font-size: 11px; color: #666; }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid #f0f0f0; }
+    .log-time { color: #999; margin-right: 4px; }
+    .controls { display: flex; gap: 8px; margin-bottom: 12px; }
+    .config-group { display: flex; gap: 8px; margin-bottom: 12px; }
+    .config-group select, .config-group input[type="number"] { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+    .badge-running { background: #d4edda; color: #155724; }
+    .badge-paused { background: #fff3cd; color: #856404; }
+    .badge-completed { background: #cce5ff; color: #004085; }
+    .badge-failed { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Deep Site Scanner</h1>
+    <div class="input-group">
+      <input type="url" id="urlInput" placeholder="https://example.com" value="">
+      <button class="btn btn-primary" id="startBtn">Start</button>
+    </div>
+    <div class="config-group">
+      <select id="depthSelect">
+        <option value="1">Depth: 1</option>
+        <option value="2">Depth: 2</option>
+        <option value="3" selected>Depth: 3</option>
+        <option value="5">Depth: 5</option>
+        <option value="10">Depth: 10</option>
+      </select>
+      <select id="scopeSelect">
+        <option value="SAME_ORIGIN" selected>Same origin</option>
+        <option value="SAME_DOMAIN">Same domain</option>
+        <option value="UNRESTRICTED">Unrestricted</option>
+      </select>
+    </div>
+    <div class="controls">
+      <button class="btn btn-danger" id="stopBtn" disabled>Stop</button>
+    </div>
+    <div class="status" id="statusPanel">
+      <div class="status-row"><span class="status-label">State</span><span class="status-value" id="stateDisplay">Idle</span></div>
+      <div class="status-row"><span class="status-label">Scanned</span><span class="status-value" id="scannedDisplay">0</span></div>
+      <div class="status-row"><span class="status-label">Found</span><span class="status-value" id="foundDisplay">0</span></div>
+      <div class="status-row"><span class="status-label">Failed</span><span class="status-value" id="failedDisplay">0</span></div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+    <div class="log" id="logPanel"></div>
+  </div>
+  <script src="./popup.ts"></script>
+</body>
+</html>
