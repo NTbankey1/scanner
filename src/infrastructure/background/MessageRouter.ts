@@ -1,5 +1,7 @@
 import { CrawlScheduler } from './CrawlScheduler';
 import { logger } from '../../shared/logger';
+import { ExportResultsUseCase } from '../../application/use-cases/ExportResultsUseCase';
+import { InMemoryResourceRepository } from '../storage/InMemoryResourceRepository';
 
 type MessageHandler = (message: any, sender: chrome.runtime.MessageSender) => Promise<any>;
 
@@ -43,8 +45,6 @@ export class MessageRouter {
       return { job: job ? job.toJSON() : null };
     });
     this.register('export-results', async (msg) => {
-      const { ExportResultsUseCase } = await import('../../application/use-cases/ExportResultsUseCase');
-      const { InMemoryResourceRepository } = await import('../storage/InMemoryResourceRepository');
       const useCase = new ExportResultsUseCase(new InMemoryResourceRepository());
       const result = await useCase.execute({ jobId: msg.jobId, format: msg.format });
       const url = URL.createObjectURL(result.blob);

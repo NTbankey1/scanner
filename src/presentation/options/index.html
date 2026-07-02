@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Deep Site Scanner — Options</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; max-width: 600px; margin: 0 auto; background: #f5f5f5; color: #333; }
+    h1 { color: #1a1a2e; font-size: 20px; }
+    .section { background: #fff; border-radius: 8px; padding: 16px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    label { display: block; margin: 8px 0; font-size: 13px; }
+    select, input[type="number"] { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
+    .btn { padding: 8px 16px; background: #0f3460; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Deep Site Scanner — Options</h1>
+  <div class="section">
+    <h3>Default Crawl Settings</h3>
+    <label>Max Depth: <input type="number" id="defaultDepth" value="3" min="1" max="10"></label>
+    <label>Max URLs: <input type="number" id="defaultMaxUrls" value="10000" min="100"></label>
+    <label>Rate Limit (ms): <input type="number" id="defaultRateLimit" value="300" min="50"></label>
+    <button class="btn" id="saveBtn">Save</button>
+    <p id="status" style="margin-top: 8px; font-size: 12px; color: #666;"></p>
+  </div>
+  <script src="./options.ts" type="module"></script>
+</body>
+</html>
