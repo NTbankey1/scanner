@@ -8,6 +8,7 @@ import { InMemoryResourceRepository } from '../storage/InMemoryResourceRepositor
 import { StartCrawlUseCase } from '../../application/use-cases/StartCrawlUseCase';
 import { logger } from '../../shared/logger';
 import { HEARTBEAT_INTERVAL_MS } from '../../shared/constants';
+import { isTrustedSender } from '../../shared/security';
 
 const eventBus = new EventBus();
 const portManager = new PortManager();
@@ -31,18 +32,50 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (rehydrated) logger.info('SW', 'Crawl resumed after rehydration');
 });
 
+// Request optional host permission for a specific URL
+async function ensureHostPermission(url: string): Promise<boolean> {
+  try {
+    const origin = new URL(url).origin;
+    const alreadyGranted = await chrome.permissions.contains({
+      origins: [origin],
+    });
+    if (alreadyGranted) return true;
+
+    const granted = await chrome.permissions.request({
+      origins: [origin],
+    });
+    return granted;
+  } catch {
+    return false;
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Handle start-crawl: use the use case, then pass to scheduler
+  // Validate sender for sensitive operations
+  if (message.action !== 'get-status' && !isTrustedSender(sender)) {
+    sendResponse({ error: 'Untrusted sender' });
+    return false;
+  }
+
+  // Handle start-crawl: request permission, use use case, pass to scheduler
   if (message.action === 'start-crawl' && message.config?.startUrl) {
-    const useCase = new StartCrawlUseCase(jobRepo, frontierRepo);
-    useCase.execute({
-      startUrl: message.config.startUrl,
-      maxDepth: message.config.maxDepth ?? 5,
-      domainScope: message.config.domainScope,
-    }).then(async (result) => {
-      await scheduler.setJobAndFrontier(result.job, result.frontier);
-      await scheduler.processNextUrl();
-      sendResponse({ success: true });
+    ensureHostPermission(message.config.startUrl).then((permitted) => {
+      if (!permitted) {
+        sendResponse({ error: 'Permission denied for host' });
+        return;
+      }
+      const useCase = new StartCrawlUseCase(jobRepo, frontierRepo);
+      useCase.execute({
+        startUrl: message.config.startUrl,
+        maxDepth: message.config.maxDepth ?? 5,
+        domainScope: message.config.domainScope,
+      }).then(async (result) => {
+        await scheduler.setJobAndFrontier(result.job, result.frontier);
+        await scheduler.processNextUrl();
+        sendResponse({ success: true });
+      }).catch(err => {
+        sendResponse({ error: String(err) });
+      });
     }).catch(err => {
       sendResponse({ error: String(err) });
     });
