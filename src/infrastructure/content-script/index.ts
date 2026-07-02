@@ -5,6 +5,10 @@ import { NetworkInterceptor } from './NetworkInterceptor';
 import { BATCH_SIZE } from '../../shared/constants';
 
 const EXTENSION_ID = chrome.runtime.id;
+let currentJobId: string | null = null;
+let scanner: DomScanner | null = null;
+let spaDetector: SpaDetector | null = null;
+let netInterceptor: NetworkInterceptor | null = null;
 
 function sendResources(jobId: string, resources: Array<{ url: string; type: string }>): void {
   for (let i = 0; i < resources.length; i += BATCH_SIZE) {
@@ -30,55 +34,74 @@ function signalScanComplete(jobId: string): void {
   });
 }
 
-function init(): void {
-  const params = new URLSearchParams(location.search);
-  const jobId = params.get('jobId') || '';
-  if (!jobId) {
-    logger.debug('ContentScript', 'No jobId, skipping');
-    return;
+function startScan(jobId: string): void {
+  currentJobId = jobId;
+  logger.debug('ContentScript', `Starting scan for job ${jobId} on ${location.href}`);
+
+  // Create utilities if not yet created
+  if (!scanner) {
+    scanner = new DomScanner((batch) => {
+      if (currentJobId) sendResources(currentJobId, batch);
+    });
+  }
+  if (!spaDetector) {
+    spaDetector = new SpaDetector(location.href);
+    spaDetector.onRouteChange((newUrl) => {
+      logger.debug('ContentScript', `SPA route change: ${newUrl}`);
+      if (!currentJobId) return;
+      setTimeout(() => {
+        const batch = scanner!.scanDocument();
+        if (batch.length > 0) sendResources(currentJobId!, batch);
+        signalScanComplete(currentJobId!);
+      }, 1000);
+    });
+  }
+  if (!netInterceptor) {
+    netInterceptor = new NetworkInterceptor();
+    netInterceptor.onRequest((requests) => {
+      if (currentJobId) sendNetworkRequests(currentJobId, requests);
+    });
   }
 
-  logger.debug('ContentScript', `Initialized for job ${jobId} on ${location.href}`);
-
-  // Create utility instances
-  const scanner = new DomScanner((batch) => sendResources(jobId, batch));
-  const spaDetector = new SpaDetector(location.href);
-  const netInterceptor = new NetworkInterceptor();
-
-  // Re-scan on SPA route changes
-  spaDetector.onRouteChange((newUrl) => {
-    logger.debug('ContentScript', `SPA route change: ${newUrl}`);
-    // Wait for the SPA to render, then scan
-    setTimeout(() => {
-      const batch = scanner.scanDocument();
-      if (batch.length > 0) sendResources(jobId, batch);
-      signalScanComplete(jobId);
-    }, 1000);
-  });
-
-  // Capture network requests as resources
-  netInterceptor.onRequest((requests) => {
-    sendNetworkRequests(jobId, requests);
-  });
-
-  // Activate monitoring
   netInterceptor.activate();
   spaDetector.activate();
 
-  // Initial scan
-  function performInitialScan(): void {
-    const batch = scanner.scanDocument();
-    if (batch.length > 0) sendResources(jobId, batch);
-    signalScanComplete(jobId);
+  // Scan current page
+  function performScan(): void {
+    if (!currentJobId) return;
+    const batch = scanner!.scanDocument();
+    if (batch.length > 0) sendResources(currentJobId, batch);
+    signalScanComplete(currentJobId);
   }
 
   if (document.readyState === 'complete') {
-    setTimeout(performInitialScan, 500);
+    setTimeout(performScan, 500);
   } else {
-    window.addEventListener('load', () => {
-      setTimeout(performInitialScan, 500);
-    });
+    window.addEventListener('load', () => setTimeout(performScan, 500));
   }
 }
 
-init();
+// Listen for commands from background script
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.action === 'start-scan') {
+    startScan(message.jobId);
+    sendResponse({ success: true });
+    return true;
+  }
+  if (message.action === 'stop-scan') {
+    currentJobId = null;
+    if (spaDetector) spaDetector.deactivate();
+    if (netInterceptor) netInterceptor.deactivate();
+    sendResponse({ success: true });
+    return true;
+  }
+});
+
+// Auto-start from URL param (injected via scripting API)
+const params = new URLSearchParams(location.search);
+const autoJobId = params.get('dssJobId');
+if (autoJobId) {
+  startScan(autoJobId);
+}
+
+logger.debug('ContentScript', 'Ready (message-driven mode)');

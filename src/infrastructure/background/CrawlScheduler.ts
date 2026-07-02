@@ -197,21 +197,39 @@ export class CrawlScheduler {
       this.pendingUrls.set(urlStr, { depth, parentId: null });
       this.pendingResources.set(urlStr, []);
 
-      // Navigate tab to this URL for scanning
+      // Navigate tab and message content script to start scan
       try {
-        const tab = await chrome.tabs.create({
-          url: urlStr,
-          active: false,
-        });
+        const tab = await chrome.tabs.create({ url: urlStr, active: false });
+        const tabId = tab.id!;
 
-        // Wait for scan-complete message or timeout
-        const timeout = setTimeout(async () => {
-          logger.warn('CrawlScheduler', `Timeout scanning ${urlStr}`);
-          this.handleScanComplete(this.currentJob!.id, urlStr);
-        }, 15000); // 15s timeout per page
+        // Wait for tab to complete loading, then message content script
+        const onUpdated = (updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
+          if (updatedTabId === tabId && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(onUpdated);
+            setTimeout(async () => {
+              try {
+                await chrome.tabs.sendMessage(tabId, {
+                  action: 'start-scan',
+                  jobId: this.currentJob!.id,
+                });
+              } catch {
+                // Content script might not be injected on some pages (chrome://, etc.)
+                logger.debug('CrawlScheduler', `No content script on ${urlStr}`);
+                await this.handleScanComplete(this.currentJob!.id, urlStr);
+              }
+            }, 800);
+          }
+        };
+        chrome.tabs.onUpdated.addListener(onUpdated);
 
-        // Store tab ID for cleanup
-        (tab as any)._dssTimeout = timeout;
+        // Safety timeout
+        setTimeout(async () => {
+          chrome.tabs.onUpdated.removeListener(onUpdated);
+          if (this.pendingUrls.has(urlStr)) {
+            logger.warn('CrawlScheduler', `Timeout scanning ${urlStr}`);
+            await this.handleScanComplete(this.currentJob!.id, urlStr);
+          }
+        }, 20000);
       } catch (err) {
         logger.error('CrawlScheduler', `Failed to create tab for ${urlStr}`, { error: String(err) });
         this.activeTabs = Math.max(0, this.activeTabs - 1);
