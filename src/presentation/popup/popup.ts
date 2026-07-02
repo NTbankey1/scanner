@@ -11,7 +11,6 @@ const progressFill = document.getElementById('progressFill') as HTMLElement;
 const logPanel = document.getElementById('logPanel')!;
 
 let currentJobId: string | null = null;
-let _pollInterval: ReturnType<typeof setInterval> | null = null;
 let port: chrome.runtime.Port | null = null;
 
 // Get current tab URL on open
@@ -133,8 +132,9 @@ function connectPort(): void {
 }
 
 // Poll for status updates when no port
-_pollInterval = setInterval(pollStatus, 2000);
+setInterval(pollStatus, 2000);
 
 initUrl();
 connectPort();
 addLog('Ready. Enter a URL to start scanning.');
+export {};

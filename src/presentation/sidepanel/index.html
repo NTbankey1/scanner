@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deep Site Scanner</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --text: #1a1a2e;
+      --text-secondary: #666;
+      --border: #e9ecef;
+      --primary: #0f3460;
+      --primary-hover: #16213e;
+      --danger: #e94560;
+      --success: #28a745;
+      --warning: #ffc107;
+      --info: #17a2b8;
+    }
+    [data-theme="dark"] {
+      --bg: #1a1a2e;
+      --bg-secondary: #16213e;
+      --text: #e9ecef;
+      --text-secondary: #adb5bd;
+      --border: #2a2a4e;
+      --primary: #0f3460;
+      --primary-hover: #1a5276;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; transition: background 0.3s, color 0.3s; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
+    .header h1 { font-size: 15px; font-weight: 600; }
+    .header-actions { display: flex; gap: 8px; }
+    .btn-icon { background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-secondary); padding: 4px; border-radius: 4px; }
+    .btn-icon:hover { background: var(--border); }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
+    .tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab:hover { background: var(--bg); }
+    .panel { display: none; padding: 12px 16px; }
+    .panel.active { display: block; }
+    .panel h2 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .stat-card { background: var(--bg-secondary); border-radius: 8px; padding: 12px; text-align: center; }
+    .stat-value { font-size: 20px; font-weight: 700; color: var(--primary); }
+    .stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+    .progress-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .badge-running { background: #d4edda; color: #155724; }
+    .badge-paused { background: #fff3cd; color: #856404; }
+    .badge-completed { background: #cce5ff; color: #004085; }
+    .badge-failed { background: #f8d7da; color: #721c24; }
+    .badge-idle { background: #e9ecef; color: #495057; }
+    .search-box { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; margin-bottom: 8px; background: var(--bg); color: var(--text); }
+    .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .filter-select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; background: var(--bg); color: var(--text); }
+    .resource-list { max-height: calc(100vh - 300px); overflow-y: auto; }
+    .resource-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .resource-item:hover { background: var(--bg-secondary); }
+    .resource-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .resource-type { padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; text-transform: uppercase; }
+    .type-HTML { background: #d4edda; color: #155724; }
+    .type-CSS { background: #cce5ff; color: #004085; }
+    .type-JAVASCRIPT { background: #fff3cd; color: #856404; }
+    .type-IMAGE { background: #e8daef; color: #6c3483; }
+    .type-API { background: #f8d7da; color: #721c24; }
+    .type-FONT { background: #d1ecf1; color: #0c5460; }
+    .type-OTHER { background: #e9ecef; color: #495057; }
+    .log-panel { max-height: calc(100vh - 200px); overflow-y: auto; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; }
+    .log-entry { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+    .log-time { color: var(--text-secondary); margin-right: 6px; }
+    .controls { display: flex; gap: 8px; margin: 8px 0; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; transition: opacity 0.2s; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+    .url-input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text); }
+    .empty-state { text-align: center; padding: 32px 16px; color: var(--text-secondary); }
+    .empty-state p { margin-top: 8px; font-size: 13px; }
+    .export-group { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Deep Site Scanner</h1>
+    <div class="header-actions">
+      <button class="btn-icon" id="themeToggle" title="Toggle dark mode">🌙</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard">Dashboard</div>
+    <div class="tab" data-tab="resources">Resources</div>
+    <div class="tab" data-tab="logs">Logs</div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="panel active" id="panel-dashboard">
+    <div class="controls">
+      <input class="url-input" id="urlInput" placeholder="Enter URL to scan..." value="">
+      <button class="btn btn-primary btn-sm" id="startBtn">Start</button>
+      <button class="btn btn-danger btn-sm" id="stopBtn" disabled>Stop</button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-value" id="statState">Idle</div><div class="stat-label">Status</div></div>
+      <div class="stat-card"><div class="stat-value" id="statScanned">0</div><div class="stat-label">Scanned</div></div>
+      <div class="stat-card"><div class="stat-value" id="statFound">0</div><div class="stat-label">Found</div></div>
+      <div class="stat-card"><div class="stat-value" id="statFailed">0</div><div class="stat-label">Failed</div></div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin:4px 0;">
+      <span id="progressLabel">Ready</span>
+    </div>
+    <div class="export-group" id="exportGroup">
+      <button class="btn btn-sm" style="background:var(--border);" data-export="json">JSON</button>
+      <button class="btn btn-sm" style="background:var(--border);" data-export="csv">CSV</button>
+      <button class="btn btn-sm" style="background:var(--border);" data-export="markdown">MD</button>
+      <button class="btn btn-sm" style="background:var(--border);" data-export="html">HTML</button>
+    </div>
+  </div>
+
+  <!-- Resources -->
+  <div class="panel" id="panel-resources">
+    <input class="search-box" id="searchInput" placeholder="Search URLs..." />
+    <div class="filter-bar">
+      <select class="filter-select" id="filterType"><option value="">All types</option><option value="HTML">HTML</option><option value="CSS">CSS</option><option value="JAVASCRIPT">JS</option><option value="IMAGE">Image</option><option value="API">API</option><option value="FONT">Font</option></select>
+      <select class="filter-select" id="filterDepth"><option value="">All depths</option><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
+      <select class="filter-select" id="filterStatus"><option value="">All status</option><option value="DISCOVERED">Discovered</option><option value="PENDING">Pending</option><option value="FETCHED">Fetched</option><option value="FAILED">Failed</option></select>
+    </div>
+    <div class="resource-list" id="resourceList">
+      <div class="empty-state"><p>Start a crawl to discover resources</p></div>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="panel" id="panel-logs">
+    <div class="log-panel" id="logPanel">
+      <div class="empty-state"><p>Activity logs will appear here</p></div>
+    </div>
+  </div>
+
+  <script src="./sidepanel.ts"></script>
+</body>
+</html>
